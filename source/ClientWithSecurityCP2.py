@@ -12,7 +12,6 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
-from cryptography.fernet import Fernet
 
 
 AUTH_MESSAGE_BYTES = bytes("Client Request SecureStore ID", encoding="utf8")
