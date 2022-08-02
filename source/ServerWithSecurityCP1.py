@@ -44,6 +44,33 @@ def read_bytes(socket, length):
     return b"".join(buffer)
 
 
+def get_auth_request(client_socket):
+    # M1 - from client
+    message_len = convert_bytes_to_int(read_bytes(client_socket, 8))
+    # M2 - from client
+    message = read_bytes(client_socket, message_len).decode("utf-8")
+    print(f"Auth Message from client: {message}")
+    return message
+
+
+def get_server_private_key():
+    # Extract keys from PEM
+    with open("./auth/server_private_key.pem", mode="r", encoding="utf8") as f:
+        private_key = serialization.load_pem_private_key(
+            bytes(f.read(), encoding="utf8"),
+            password=None,
+        )
+    # public_key = private_key.public_key()
+    return private_key
+
+
+def get_signed_crt():
+    # get the crt data as bytes
+    with open("./auth/server_signed.crt", mode="rb") as f:
+        crt_file_data = f.read()
+    return crt_file_data
+
+
 def main(args):
     port = int(args[0]) if len(args) > 0 else 4321
     address = args[1] if len(args) > 1 else "localhost"
@@ -103,7 +130,6 @@ def main(args):
                             print(
                                 f"Finished receiving file in {(time.time() - start_time)}s!"
                             )
-
                         case 2:
                             # Close the connection
                             # Python context used here so no need to explicitly close the socket
@@ -111,34 +137,10 @@ def main(args):
                             s.close()
                             break
                         case 3:
-                            print("auth case -3")
-                            # For Auth
-
-                            # M1 - from client
-                            message_len = convert_bytes_to_int(
-                                read_bytes(client_socket, 8)
-                            )
-
-                            # M2 - from client
-                            message = read_bytes(client_socket, message_len).decode(
-                                "utf-8"
-                            )
-                            print(f"Auth Message from client {message}")
-
-                            # Extract private and public keys from PEM
-                            try:
-                                with open(
-                                    "./auth/server_private_key.pem",
-                                    mode="r",
-                                    encoding="utf8",
-                                ) as key_file:
-                                    private_key = serialization.load_pem_private_key(
-                                        bytes(key_file.read(), encoding="utf8"),
-                                        password=None,
-                                    )
-                                # public_key = private_key.public_key()
-                            except Exception as e:
-                                print(e)
+                            # Authentication procedure
+                            message = get_auth_request(client_socket)
+                            
+                            private_key = get_server_private_key()
 
                             auth_message_bytes = bytes(message, encoding="utf-8")
                             signed_message = private_key.sign(
@@ -149,15 +151,7 @@ def main(args):
                                 ),
                                 hashes.SHA256(),  # hashing algorithm used to hash the data before encryption
                             )
-
-                            # get the crt data as bytes
-                            try:
-                                with open(
-                                    "./auth/server_signed.crt", mode="rb"
-                                ) as crt_file:
-                                    crt_file_data = crt_file.read()
-                            except Exception as e:
-                                print(e)
+                            crt_file_data = get_signed_crt()
 
                             client_socket.sendall(
                                 convert_int_to_bytes(len(signed_message))
