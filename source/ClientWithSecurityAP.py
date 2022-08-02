@@ -14,6 +14,9 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 
 
+AUTH_MESSAGE_BYTES = bytes("Client Request SecureStore ID", encoding="utf8")
+
+
 def convert_int_to_bytes(x):
     """
     Convenience function to convert Python integers to a length-8 byte representation
@@ -44,18 +47,34 @@ def read_bytes(socket, length):
     return b"".join(buffer)
 
 
+def send_auth_request(s):
+    s.sendall(convert_int_to_bytes(3))
+    s.sendall(convert_int_to_bytes(len(AUTH_MESSAGE_BYTES)))
+    s.sendall(AUTH_MESSAGE_BYTES)
+
+
+def read_auth_response(s):
+    signed_message_length = convert_bytes_to_int(read_bytes(s, 8))
+    signed_message = read_bytes(s, signed_message_length)
+    crt_file_data_length = convert_bytes_to_int(read_bytes(s, 8))
+    crt_file_data = read_bytes(s, crt_file_data_length)
+    return signed_message, crt_file_data
+
+
+def get_ca_public_key():
+    with open("auth/cacsertificate.crt", "rb") as f:
+        ca_cert_raw = f.read()
+    ca_cert = x509.load_pem_x509_certificate(
+        data=ca_cert_raw, backend=default_backend()
+    )
+    return ca_cert.public_key()
+
+
 def main(args):
     port = int(args[0]) if len(args) > 0 else 4321
     server_address = args[1] if len(args) > 1 else "localhost"
 
     start_time = time.time()
-
-    f = open("auth/cacsertificate.crt", "rb")
-    ca_cert_raw = f.read()
-    ca_cert = x509.load_pem_x509_certificate(
-        data=ca_cert_raw, backend=default_backend()
-    )
-    ca_public_key = ca_cert.public_key()
 
     # try:
     print("Establishing connection to server...")
@@ -65,51 +84,43 @@ def main(args):
         print("Connected")
 
         # MODE 3 -- send to server
-        s.sendall(convert_int_to_bytes(3))
-        auth_message = "Client Request SecureStore ID"
-        auth_message_bytes = bytes(auth_message, encoding="utf8")
-        s.sendall(convert_int_to_bytes(len(auth_message_bytes)))
-        s.sendall(auth_message_bytes)
+        send_auth_request(s)
+        signed_message, crt_file_data = read_auth_response(s)
+        
+        try:
+            # load signed certificate from response, verify its signed by CA
+            server_cert = x509.load_pem_x509_certificate(
+                data=crt_file_data, backend=default_backend()
+            )
 
-        signed_message_length = convert_bytes_to_int(read_bytes(s, 8))
-        signed_message = read_bytes(s, signed_message_length)
-        crt_file_data_length = convert_bytes_to_int(read_bytes(s, 8))
-        crt_file_data = read_bytes(s, crt_file_data_length)
+            get_ca_public_key().verify(
+                signature=server_cert.signature,  # signature bytes to verify
+                data=server_cert.tbs_certificate_bytes,  # certificate data bytes that was signed by CA
+                padding=padding.PKCS1v15(),  # padding used by CA bot to sign the the server's csr
+                algorithm=server_cert.signature_hash_algorithm,
+            )
 
-        server_cert = x509.load_pem_x509_certificate(
-            data=crt_file_data, backend=default_backend()
-        )
-        server_public_key = server_cert.public_key()
-        assert (
-            server_cert.not_valid_before
-            <= datetime.utcnow()
-            <= server_cert.not_valid_after
-        )
+            # get public key, use it and check message tallies
+            server_public_key = server_cert.public_key()
+            assert (
+                server_cert.not_valid_before
+                <= datetime.utcnow()
+                <= server_cert.not_valid_after
+            )
 
-        f = open("auth/cacsertificate.crt", "rb")
-        ca_cert_raw = f.read()
-        ca_cert = x509.load_pem_x509_certificate(
-            data=ca_cert_raw, backend=default_backend()
-        )
-        ca_public_key = ca_cert.public_key()
-
-        ca_public_key.verify(
-            signature=server_cert.signature,  # signature bytes to  verify
-            data=server_cert.tbs_certificate_bytes,  # certificate data bytes that was signed by CA
-            padding=padding.PKCS1v15(),  # padding used by CA bot to sign the the server's csr
-            algorithm=server_cert.signature_hash_algorithm,
-        )
-
-        server_public_key.verify(
-            signed_message,
-            auth_message_bytes,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH,
-            ),
-            hashes.SHA256(),
-        )
-        # will continue here if the verify above passes
+            server_public_key.verify(
+                signed_message,
+                AUTH_MESSAGE_BYTES,
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                hashes.SHA256(),
+            )
+        except Exception as e:
+            s.sendall(convert_int_to_bytes(2))
+            print("Authentication fail. Signature does not validate. Closing connection...")
+            exit()
 
         while True:
 
