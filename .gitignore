@@ -1,2 +1,6 @@
 .DS_Store
 .vscode/
+source/recv_files/
+source/recv_files_enc/
+source/send_files_enc/
+source/auth/server*
