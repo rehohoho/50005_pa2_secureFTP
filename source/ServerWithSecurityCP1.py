@@ -75,8 +75,6 @@ def main(args):
     port = int(args[0]) if len(args) > 0 else 4321
     address = args[1] if len(args) > 1 else "localhost"
 
-    file_data_blocks = []
-
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((address, port))
@@ -104,14 +102,19 @@ def main(args):
                                 read_bytes(client_socket, 8)
                             )
 
+                            enc_filename = f"enc_recv_{filename.split('/')[-1]}"
+                            enc_fp = open(f"recv_files_enc/{enc_filename}", mode="ab")
+
+                            file_data_blocks = []
                             for _ in range(0, file_len, 62):
                                 block_len = convert_bytes_to_int(
                                     read_bytes(client_socket, 8)
                                 )
-                                print(block_len)
 
                                 encrypted_block = read_bytes(client_socket, block_len)
-                                print("receiving encrypted block...")
+                                enc_fp.write(encrypted_block)
+                                print(f"receiving encrypted block... {block_len}")
+                                
                                 decrypted_message = private_key.decrypt(
                                     encrypted_block,
                                     padding.OAEP(
@@ -122,10 +125,11 @@ def main(args):
                                 )
                                 file_data_blocks.append(decrypted_message)
 
-                            filename = "recv_" + filename.split("/")[-1]
+                            enc_fp.close()
 
                             # Write the file with 'recv_' prefix
-                            with open(f"recv_files_enc/{filename}", mode="wb") as fp:
+                            filename = "recv_" + filename.split("/")[-1]
+                            with open(f"recv_files/{filename}", mode="wb") as fp:
                                 fp.write(b"".join(file_data_blocks))
                             print(
                                 f"Finished receiving file in {(time.time() - start_time)}s!"

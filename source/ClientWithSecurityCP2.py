@@ -170,6 +170,10 @@ def main(args):
             s.sendall(convert_int_to_bytes(len(encrypted_message)))
             s.sendall(encrypted_message)
 
+            filename = filename.split('/')[-1]
+            with open(f"send_files_enc/enc_{filename}", mode="wb") as f:
+                f.write(encrypted_message)
+
         # Close the connection
         s.sendall(convert_int_to_bytes(2))
         print("Closing connection...")

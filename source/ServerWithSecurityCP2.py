@@ -120,10 +120,12 @@ def main(args):
                             decrypted_data = session_key.decrypt(encrypted_data)
                             # print(decrypted_data)
 
-                            filename = "recv_" + filename.split("/")[-1]
+                            filename = filename.split("/")[-1]
+                            with open(f"recv_files_enc/enc_recv_{filename}", mode="wb") as f:
+                                f.write(encrypted_data)
 
                             # Write the file with 'recv_' prefix
-                            with open(f"recv_files_enc/{filename}", mode="wb") as fp:
+                            with open(f"recv_files/recv_{filename}", mode="wb") as fp:
                                 fp.write(decrypted_data)
                             print(
                                 f"Finished receiving file in {(time.time() - start_time)}s!"

@@ -141,6 +141,9 @@ def main(args):
             s.sendall(convert_int_to_bytes(len(filename_bytes)))
             s.sendall(filename_bytes)
 
+            enc_filename = f"send_files_enc/enc_{filename.split('/')[-1]}"
+            enc_fp = open(enc_filename, mode="ab")
+
             # Send the file
             with open(filename, mode="rb") as fp:
                 data = fp.read()
@@ -161,6 +164,9 @@ def main(args):
                     )
                     s.sendall(convert_int_to_bytes(len(encrypted_message)))
                     s.sendall(encrypted_message)
+                    enc_fp.write(encrypted_message)
+            
+            enc_fp.close()
 
         # Close the connection
         s.sendall(convert_int_to_bytes(2))
