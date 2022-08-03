@@ -48,7 +48,7 @@ def get_auth_request(client_socket):
     # M1 - from client
     message_len = convert_bytes_to_int(read_bytes(client_socket, 8))
     # M2 - from client
-    message = read_bytes(client_socket, message_len).decode("utf-8")
+    message = read_bytes(client_socket, message_len)
     print(f"Auth Message from client: {message}")
     return message
 
@@ -120,13 +120,11 @@ def main(args):
                             break
                         case 3:
                             # Authentication procedure
-                            message = get_auth_request(client_socket)
-                            
+                            auth_nonce = get_auth_request(client_socket)
                             private_key = get_server_private_key()
 
-                            auth_message_bytes = bytes(message, encoding="utf-8")
                             signed_message = private_key.sign(
-                                auth_message_bytes,  # message in bytes format
+                                auth_nonce,  # message in bytes format
                                 padding.PSS(
                                     mgf=padding.MGF1(hashes.SHA256()),
                                     salt_length=padding.PSS.MAX_LENGTH,

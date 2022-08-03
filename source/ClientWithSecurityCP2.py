@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 
 
-AUTH_MESSAGE_BYTES = bytes("Client Request SecureStore ID", encoding="utf8")
+AUTH_NONCE = secrets.token_bytes(64)
 
 
 def convert_int_to_bytes(x):
@@ -49,8 +49,8 @@ def read_bytes(socket, length):
 
 def send_auth_request(s):
     s.sendall(convert_int_to_bytes(3))
-    s.sendall(convert_int_to_bytes(len(AUTH_MESSAGE_BYTES)))
-    s.sendall(AUTH_MESSAGE_BYTES)
+    s.sendall(convert_int_to_bytes(len(AUTH_NONCE)))
+    s.sendall(AUTH_NONCE)
 
 
 def read_auth_response(s):
@@ -128,7 +128,7 @@ def main(args):
 
             server_public_key.verify(
                 signed_message,
-                AUTH_MESSAGE_BYTES,
+                AUTH_NONCE,
                 padding.PSS(
                     mgf=padding.MGF1(hashes.SHA256()),
                     salt_length=padding.PSS.MAX_LENGTH,
